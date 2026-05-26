@@ -26,7 +26,7 @@ func newRepoCloneCmd(flags *globalFlags) *cobra.Command {
 			}
 			repos, err := resolver.Resolve(c.Context(), org, slug, opts)
 			if err != nil {
-				return err
+				return translateAPIError(err)
 			}
 			return cloneAll(c, repos)
 		},

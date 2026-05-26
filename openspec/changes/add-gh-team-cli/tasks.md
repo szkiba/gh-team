@@ -27,11 +27,11 @@
   - [x] 3.2.2 Aggregate clone failures, exit non-zero if any failed
 
 ## 4. Validation & errors
-- [ ] 4.1 Reject malformed `<org/team-slug>` arguments with usage hint
-- [ ] 4.1a Reject missing team / missing org with clear stderr error (preflight 404)
-- [ ] 4.2 Reject `--direct-only --ownership=codeowners`
-- [ ] 4.3 Surface GitHub API auth errors with actionable guidance (`gh auth login`)
-- [ ] 4.4 Surface GitHub API rate-limit errors with reset time
+- [x] 4.1 Reject malformed `<org/team-slug>` arguments with usage hint
+- [x] 4.1a Reject missing team / missing org with clear stderr error (preflight 404)
+- [x] 4.2 Reject `--direct-only --ownership=codeowners`
+- [x] 4.3 Surface GitHub API auth errors with actionable guidance (`gh auth login`)
+- [x] 4.4 Surface GitHub API rate-limit errors with reset time
 
 ## 5. Testing
 - [ ] 5.1 Unit tests for both ownership strategies

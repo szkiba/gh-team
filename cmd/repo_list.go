@@ -22,7 +22,7 @@ func newRepoListCmd(flags *globalFlags) *cobra.Command {
 			}
 			repos, err := resolver.Resolve(c.Context(), org, slug, opts)
 			if err != nil {
-				return err
+				return translateAPIError(err)
 			}
 			out := c.OutOrStdout()
 			for _, r := range repos {
