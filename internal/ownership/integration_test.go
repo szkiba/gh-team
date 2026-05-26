@@ -66,11 +66,13 @@ func TestIntegration_CodeownersFullFlow(t *testing.T) {
 
 	// web: simple wildcard owner in .github.
 	c.on("repos/octo/web/contents/.github/CODEOWNERS", staticJSON(base64File("* @octo/platform\n")))
+	c.on("repos/octo/web", staticJSON(repoMeta(false)))
 
 	// docsite: docs/CODEOWNERS fallback after the two earlier paths 404.
 	c.on("repos/octo/docsite/contents/.github/CODEOWNERS", notFound())
 	c.on("repos/octo/docsite/contents/CODEOWNERS", notFound())
 	c.on("repos/octo/docsite/contents/docs/CODEOWNERS", staticJSON(base64File("* @octo/platform\n")))
+	c.on("repos/octo/docsite", staticJSON(repoMeta(false)))
 
 	// stale: search returned it but the file is now gone everywhere.
 	c.on("repos/octo/stale/contents/.github/CODEOWNERS", notFound())

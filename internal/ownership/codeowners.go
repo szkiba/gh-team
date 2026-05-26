@@ -38,7 +38,7 @@ func (s *codeownersStrategy) Resolve(_ context.Context, org, teamSlug string, op
 	// invocation. stdout and exit status are unaffected.
 	fmt.Fprintln(s.stderr, "note: --ownership=codeowners results come from GitHub's code search index; recently added or renamed CODEOWNERS files may be missing until they are re-indexed.")
 
-	candidates, err := s.searchCandidates(org, teamSlug, opts.IncludeArchived)
+	candidates, err := s.searchCandidates(org, teamSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -52,9 +52,21 @@ func (s *codeownersStrategy) Resolve(_ context.Context, org, teamSlug string, op
 			}
 			return nil, err
 		}
-		if teamOwnsWildcard(content, org, teamSlug) {
-			owned = append(owned, c)
+		if !teamOwnsWildcard(content, org, teamSlug) {
+			continue
 		}
+		// Archived state isn't populated by the code-search response's
+		// minimal-repo object, and GitHub's code search rejects an
+		// "archived:false" qualifier outright (returning zero hits), so it
+		// must be resolved with a per-candidate metadata fetch. We defer it
+		// until after the parse decision so non-owning candidates do not
+		// pay the extra REST call.
+		archived, err := s.fetchRepoArchived(c.Owner, c.Name)
+		if err != nil {
+			return nil, err
+		}
+		c.Archived = archived
+		owned = append(owned, c)
 	}
 	return finalize(owned, opts.IncludeArchived), nil
 }
@@ -63,28 +75,30 @@ type searchCodeResponse struct {
 	TotalCount int `json:"total_count"`
 	Items      []struct {
 		Repository struct {
-			Name     string `json:"name"`
-			Owner    struct {
+			Name  string `json:"name"`
+			Owner struct {
 				Login string `json:"login"`
 			} `json:"owner"`
-			Archived bool `json:"archived"`
 		} `json:"repository"`
 	} `json:"items"`
 }
 
-// searchCandidates issues the broad team-mention query GitHub indexed across
-// CODEOWNERS files. The broad form (just the team mention, no `*` constraint)
+// searchCandidates issues the broad team-mention query against CODEOWNERS
+// files in the org. The broad form (just the team mention, no `*` constraint)
 // is required so wildcard lines with multiple owners or unusual whitespace are
 // not missed at the candidate stage. Per-repo exactness is enforced later.
 //
-// When archived repos are excluded, the `archived:false` qualifier is added so
-// the search index does the filtering, sparing one repo-metadata fetch per
-// candidate.
-func (s *codeownersStrategy) searchCandidates(org, teamSlug string, includeArchived bool) ([]Repo, error) {
-	q := fmt.Sprintf(`org:%s path:CODEOWNERS "@%s/%s"`, org, org, teamSlug)
-	if !includeArchived {
-		q += " archived:false"
-	}
+// Two query-syntax details matter:
+//   - filename:CODEOWNERS, not path:CODEOWNERS. GitHub's code search treats
+//     `path:` as an exact path match against the literal "CODEOWNERS" string
+//     and returns zero hits for the files that actually live at
+//     .github/CODEOWNERS or docs/CODEOWNERS.
+//   - The archived filter cannot be pushed into the query. The
+//     "archived:false" qualifier is only honored by repo-search; in
+//     code-search it causes GitHub to return zero hits. Archive state is
+//     resolved per owned candidate above.
+func (s *codeownersStrategy) searchCandidates(org, teamSlug string) ([]Repo, error) {
+	q := fmt.Sprintf(`org:%s filename:CODEOWNERS "@%s/%s"`, org, org, teamSlug)
 	encoded := url.QueryEscape(q)
 
 	seen := make(map[string]struct{})
@@ -96,7 +110,7 @@ func (s *codeownersStrategy) searchCandidates(org, teamSlug string, includeArchi
 			return nil, err
 		}
 		for _, item := range resp.Items {
-			r := Repo{Owner: item.Repository.Owner.Login, Name: item.Repository.Name, Archived: item.Repository.Archived}
+			r := Repo{Owner: item.Repository.Owner.Login, Name: item.Repository.Name}
 			if _, dup := seen[r.FullName()]; dup {
 				continue
 			}
@@ -139,4 +153,17 @@ func (s *codeownersStrategy) fetchEffectiveCodeowners(owner, repo string) (strin
 		return string(decoded), nil
 	}
 	return "", errNoCodeowners
+}
+
+// fetchRepoArchived returns the `archived` flag for a single repository. It
+// is called for every owned candidate so the archived filter can run; the
+// minimal-repo object that code search returns does not include this field.
+func (s *codeownersStrategy) fetchRepoArchived(owner, name string) (bool, error) {
+	var resp struct {
+		Archived bool `json:"archived"`
+	}
+	if err := s.client.Get(fmt.Sprintf("repos/%s/%s", owner, name), &resp); err != nil {
+		return false, err
+	}
+	return resp.Archived, nil
 }
