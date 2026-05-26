@@ -34,9 +34,9 @@
 - [x] 4.4 Surface GitHub API rate-limit errors with reset time
 
 ## 5. Testing
-- [ ] 5.1 Unit tests for both ownership strategies
-- [ ] 5.2 CODEOWNERS parser tests (comment stripping, blank lines, precedence: last `*` wins, multi-owner lines, path-scoped lines ignored, file resolution `.github/CODEOWNERS` > `CODEOWNERS` > `docs/CODEOWNERS`)
-- [ ] 5.3 Integration tests with recorded GitHub API fixtures
+- [x] 5.1 Unit tests for both ownership strategies
+- [x] 5.2 CODEOWNERS parser tests (comment stripping, blank lines, precedence: last `*` wins, multi-owner lines, path-scoped lines ignored, file resolution `.github/CODEOWNERS` > `CODEOWNERS` > `docs/CODEOWNERS`)
+- [x] 5.3 Integration tests with recorded GitHub API fixtures
 
 ## 6. Docs
 - [ ] 6.1 README with install + usage examples
