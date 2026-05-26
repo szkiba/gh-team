@@ -1,9 +1,9 @@
 # Tasks
 
 ## 1. Project scaffolding
-- [ ] 1.1 Create Go module and `gh` extension manifest (`gh-team` binary)
-- [ ] 1.2 Set up Cobra root command with global flags (`--ownership`, `--direct-only`, `--include-archived`)
-- [ ] 1.3 Wire `--direct-only` + `--ownership=codeowners` validation error at the root
+- [x] 1.1 Create Go module and `gh` extension manifest (`gh-team` binary)
+- [x] 1.2 Set up Cobra root command with global flags (`--ownership`, `--direct-only`, `--include-archived`)
+- [x] 1.3 Wire `--direct-only` + `--ownership=codeowners` validation error at the root
 
 ## 2. Ownership resolver
 - [ ] 2.1 Define `Resolver` interface returning `[]Repo` for a team slug
