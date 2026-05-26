@@ -21,10 +21,10 @@
 - [x] 2.5 Sort results alphabetically by repo name
 
 ## 3. `team repo` subcommands
-- [ ] 3.1 `team repo list <org/team-slug>` — print names, one per line
-- [ ] 3.2 `team repo clone <org/team-slug>` — invoke `gh repo clone` for each
-  - [ ] 3.2.1 Skip already-cloned directories with a non-fatal warning
-  - [ ] 3.2.2 Aggregate clone failures, exit non-zero if any failed
+- [x] 3.1 `team repo list <org/team-slug>` — print names, one per line
+- [x] 3.2 `team repo clone <org/team-slug>` — invoke `gh repo clone` for each
+  - [x] 3.2.1 Skip already-cloned directories with a non-fatal warning
+  - [x] 3.2.2 Aggregate clone failures, exit non-zero if any failed
 
 ## 4. Validation & errors
 - [ ] 4.1 Reject malformed `<org/team-slug>` arguments with usage hint

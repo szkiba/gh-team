@@ -41,6 +41,8 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().BoolVar(&flags.includeArchived, "include-archived", false,
 		"include archived repositories")
 
+	root.AddCommand(newRepoCmd(flags))
+
 	return root
 }
 
