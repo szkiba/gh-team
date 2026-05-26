@@ -23,7 +23,7 @@ jobs:
       # the test suite would have flagged. Without this step the precompile
       # action would happily build and publish a failing tree.
       - name: Test
-        run: go test ./internal/ownership/
+        run: go test ./...
 
       - name: Build and publish release binaries
         uses: cli/gh-extension-precompile@v2
