@@ -39,5 +39,5 @@
 - [x] 5.3 Integration tests with recorded GitHub API fixtures
 
 ## 6. Docs
-- [ ] 6.1 README with install + usage examples
-- [ ] 6.2 `--help` output for every subcommand
+- [x] 6.1 README with install + usage examples
+- [x] 6.2 `--help` output for every subcommand

@@ -14,7 +14,14 @@ import (
 func newRepoCmd(flags *globalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "repo",
-		Short: "Repository discovery subcommands",
+		Short: "List or clone repositories owned by a team",
+		Long: `Subcommands that act on the set of repositories owned by a team.
+
+The "list" subcommand prints names; "clone" runs "gh repo clone" for
+each. Both honor the global --ownership, --direct-only, and
+--include-archived flags.`,
+		Example: `  gh team repo list octo/platform
+  gh team repo clone octo/platform --ownership=codeowners`,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return c.Help()
 		},
