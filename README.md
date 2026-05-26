@@ -6,9 +6,24 @@ It is designed for teams that need a consistent, scriptable way to answer questi
 
 ## Status
 
-This repository is currently in the specification phase. It contains the project brief and OpenSpec requirements for the MVP, but the Go implementation has not been scaffolded yet.
+This repository is in early implementation. The Go module is scaffolded — Cobra root command, global flags, and the `--direct-only` + `--ownership=codeowners` rejection are wired. Subcommands (`team repo list`, `team repo clone`) and the ownership resolver are not implemented yet; they are tracked in [`openspec/changes/add-gh-team-cli/tasks.md`](./openspec/changes/add-gh-team-cli/tasks.md).
 
 The MVP is intentionally focused on repository discovery and cloning. Security and vulnerability commands are planned as a follow-up once the shared ownership resolver exists.
+
+## Build from source
+
+Requires Go 1.25+ and the `gh` CLI on `PATH`.
+
+```bash
+go build -o gh-team .
+./gh-team --help
+```
+
+To install as a `gh` extension from a local checkout:
+
+```bash
+gh extension install .
+```
 
 ## Planned Features
 
@@ -117,6 +132,8 @@ The extension is not published yet. Once it is published, installation is expect
 ```bash
 gh extension install szkiba/gh-team
 ```
+
+For now, see [Build from source](#build-from-source).
 
 ## Repository Layout
 
