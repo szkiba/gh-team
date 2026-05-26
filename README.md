@@ -12,25 +12,30 @@ The MVP (`team repo list`, `team repo clone`) is implemented and tested. The MVP
 
 Requires the `gh` CLI on `PATH` and an authenticated session (`gh auth login`).
 
-From source:
+The recommended path is to install the published extension:
 
 ```bash
+gh extension install szkiba/gh-team
+gh team --help
+```
+
+`gh` will download the precompiled binary for your platform from the most recent GitHub Release. If no release matches your platform, or you want the latest unreleased code, build from a checkout:
+
+```bash
+git clone https://github.com/szkiba/gh-team.git
+cd gh-team
 go build -o gh-team .
 ./gh-team --help
 ```
 
-Or as a local `gh` extension from a checkout:
+Or install the checkout as a local extension:
 
 ```bash
 gh extension install .
 gh team --help
 ```
 
-Building from source requires Go 1.25+. The extension is not yet published to a registry; once it is, the usual flow will work:
-
-```bash
-gh extension install szkiba/gh-team   # not published yet
-```
+Building from source requires Go 1.25+.
 
 ## Commands
 
@@ -123,10 +128,23 @@ gh team repo list octo/platform | xargs -L1 gh repo view
 - Invalid team arguments, missing teams, invalid flag combinations, authentication failures, and rate-limit failures return a non-zero exit status.
 - Rate-limit errors name the affected limit (core REST, GraphQL, or code search) and the absolute UTC reset time taken from the response headers.
 
+## Releasing
+
+A release is cut by pushing a semver tag. The [`release`](./.github/workflows/release.yml) workflow runs the test suite, cross-compiles `gh-team` for the canonical `gh` extension target matrix (linux/darwin/windows × amd64/arm64), and attaches the binaries to a GitHub Release named after the tag.
+
+```bash
+git tag v0.1.0
+git push --tags
+```
+
+The release will appear at `https://github.com/szkiba/gh-team/releases/tag/v0.1.0` once the workflow finishes. From that point on, `gh extension install szkiba/gh-team` downloads the precompiled binary for the user's platform. A failing test blocks the release; no binaries are published.
+
 ## Repository layout
 
 - [`brief.md`](./brief.md) — product brief for the MVP.
 - [`openspec/project.md`](./openspec/project.md) — project context, constraints, and conventions.
-- [`openspec/changes/add-gh-team-cli/`](./openspec/changes/add-gh-team-cli/) — proposal, tasks, and detailed specs.
+- [`openspec/specs/`](./openspec/specs/) — current, archived specs (`team-cli`, `team-ownership`, `team-repo`).
+- [`openspec/changes/`](./openspec/changes/) — in-flight and archived change proposals.
 - [`cmd/`](./cmd/) — Cobra command tree.
 - [`internal/ownership/`](./internal/ownership/) — strategy-agnostic resolver, both ownership strategies, and CODEOWNERS parser.
+- [`.github/workflows/`](./.github/workflows/) — CI and release pipelines.
