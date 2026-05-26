@@ -23,4 +23,4 @@ jobs:
         run: go vet ./cmd/... ./internal/... .
 
       - name: Test
-        run: go test ./internal/ownership/
+        run: go test ./...
