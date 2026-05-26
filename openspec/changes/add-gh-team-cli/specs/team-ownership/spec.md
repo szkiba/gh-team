@@ -32,7 +32,7 @@ When `--ownership=codeowners` is in effect, the system SHALL resolve ownership t
 
 **Completeness scope.** The system makes an **exact per-candidate** decision but does NOT guarantee org-wide completeness of the result set, because the candidate set comes from GitHub's code search index, which lags the default branch. A repository that legitimately satisfies the ownership rule may be absent from the result set if its `CODEOWNERS` file is not yet (or no longer) reflected in the search index. The command SHALL print a one-line note to stderr identifying this limitation whenever `--ownership=codeowners` is used, so users are not misled into treating the output as a guaranteed-complete enumeration.
 
-**Candidate discovery.** The system SHALL issue a GitHub code search query of the form `org:<ORG> path:CODEOWNERS "@<ORG>/<TEAM>"`. The broad query (just the team mention) is required so that wildcard lines with multiple owners or unusual whitespace are not missed at the discovery step. Repositories returned by this search are *candidates*; nothing further is concluded from the snippets.
+**Candidate discovery.** The system SHALL issue a GitHub code search query of the form `org:<ORG> filename:CODEOWNERS "@<ORG>/<TEAM>"`. The broad query (just the team mention) is required so that wildcard lines with multiple owners or unusual whitespace are not missed at the discovery step. Repositories returned by this search are *candidates*; nothing further is concluded from the snippets.
 
 **Effective file selection.** For each candidate, the system SHALL fetch the contents of the **first existing** of the following paths on the default branch, in this order, and use that file alone:
 
