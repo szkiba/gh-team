@@ -21,9 +21,27 @@ func newRootCmd() *cobra.Command {
 	flags := &globalFlags{}
 
 	root := &cobra.Command{
-		Use:           "team",
-		Short:         "Discover repositories owned by a GitHub team",
-		Long:          "gh team lists or clones repositories owned by a GitHub team, using a configurable ownership strategy.",
+		Use:   "team",
+		Short: "Discover repositories owned by a GitHub team",
+		Long: `gh team lists or clones the repositories owned by a GitHub team.
+
+Ownership is resolved through a configurable Team Ownership Model:
+  - permission (default): the team or any sub-team has Admin or Maintain
+    permission on the repository.
+  - codeowners: the team appears on the last bare "*" rule in the
+    repository's effective CODEOWNERS file on the default branch.
+
+The team argument is always "<org>/<team-slug>". Authentication and
+rate limits are inherited from the host gh CLI session; sign in with
+"gh auth login" first.`,
+		Example: `  # List repositories the platform team owns (permission strategy)
+  gh team repo list octo/platform
+
+  # List repositories using CODEOWNERS instead
+  gh team repo list octo/platform --ownership=codeowners
+
+  # Clone every owned repository into the current directory
+  gh team repo clone octo/platform`,
 		SilenceUsage:  true,
 		SilenceErrors: false,
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {

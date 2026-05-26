@@ -1,38 +1,51 @@
 # gh team
 
-`gh team` is a planned GitHub CLI (`gh`) extension for discovering repositories owned by a GitHub team.
+`gh team` is a GitHub CLI (`gh`) extension for discovering repositories owned by a GitHub team.
 
 It is designed for teams that need a consistent, scriptable way to answer questions like "which repositories do we own?" without writing custom API scripts or clicking through the GitHub UI.
 
 ## Status
 
-This repository is in early implementation. The Go module is scaffolded — Cobra root command, global flags, and the `--direct-only` + `--ownership=codeowners` rejection are wired. Subcommands (`team repo list`, `team repo clone`) and the ownership resolver are not implemented yet; they are tracked in [`openspec/changes/add-gh-team-cli/tasks.md`](./openspec/changes/add-gh-team-cli/tasks.md).
+The MVP (`team repo list`, `team repo clone`) is implemented and tested. The MVP is intentionally focused on repository discovery and cloning. Security and vulnerability commands are tracked for a follow-up change once the shared ownership resolver is in production use.
 
-The MVP is intentionally focused on repository discovery and cloning. Security and vulnerability commands are planned as a follow-up once the shared ownership resolver exists.
+## Install
 
-## Build from source
+Requires the `gh` CLI on `PATH` and an authenticated session (`gh auth login`).
 
-Requires Go 1.25+ and the `gh` CLI on `PATH`.
+From source:
 
 ```bash
 go build -o gh-team .
 ./gh-team --help
 ```
 
-To install as a `gh` extension from a local checkout:
+Or as a local `gh` extension from a checkout:
 
 ```bash
 gh extension install .
+gh team --help
 ```
 
-## Planned Features
+Building from source requires Go 1.25+. The extension is not yet published to a registry; once it is, the usual flow will work:
 
-- List repositories owned by a team.
-- Clone all repositories owned by a team.
-- Support multiple ownership models through a shared resolver.
-- Reuse the authenticated host `gh` session instead of introducing separate token handling.
+```bash
+gh extension install szkiba/gh-team   # not published yet
+```
 
-## Ownership Models
+## Commands
+
+```text
+gh team repo list <org/team-slug>
+gh team repo clone <org/team-slug>
+```
+
+### Global flags
+
+- `--ownership=permission|codeowners` (default `permission`) — selects the ownership strategy.
+- `--direct-only` — evaluates only repositories assigned directly to the top-level team, skipping sub-teams. Only valid with `--ownership=permission`; `--direct-only --ownership=codeowners` is rejected with an error because CODEOWNERS has no team hierarchy to limit.
+- `--include-archived` — includes archived repositories in the result (excluded by default).
+
+## Ownership models
 
 `gh team` supports two ownership strategies selected with `--ownership`:
 
@@ -45,24 +58,9 @@ The `codeowners` strategy uses GitHub code search to find candidate repositories
 
 It also costs more API work than `permission`: one code-search request plus one `contents` fetch per candidate repository. On large organizations, code-search rate limits can become the main constraint.
 
-Whenever `--ownership=codeowners` is used, the command also prints a one-line note to `stderr` stating that the result is based on GitHub's code search index and may omit recently added or renamed `CODEOWNERS` files until they are re-indexed. The note does not change `stdout` or the exit status.
+Whenever `--ownership=codeowners` is used, the command prints a one-line note to `stderr` stating that the result is based on GitHub's code search index and may omit recently added or renamed `CODEOWNERS` files until they are re-indexed. The note does not change `stdout` or the exit status.
 
-## Planned Commands and Flags
-
-```text
-gh team repo list <org/team-slug>
-gh team repo clone <org/team-slug>
-```
-
-### Global Flags
-
-- `--ownership=permission|codeowners` (default `permission`): selects the ownership strategy.
-- `--direct-only`: evaluates only repositories assigned directly to the top-level team, skipping sub-teams. Only valid with `--ownership=permission`; `--direct-only --ownership=codeowners` is rejected with an error because CODEOWNERS has no team hierarchy to limit.
-- `--include-archived`: includes archived repositories in the result (excluded by default).
-
-## Planned Usage Examples
-
-These examples describe the intended CLI once the extension is implemented and published.
+## Usage
 
 List repositories owned by a team using the default `permission` strategy:
 
@@ -84,12 +82,6 @@ List repositories using the `codeowners` strategy:
 gh team repo list octo/platform --ownership=codeowners
 ```
 
-Example output:
-
-```text
-octo/api
-```
-
 List only repositories directly assigned to the top-level team:
 
 ```bash
@@ -108,7 +100,13 @@ Clone all owned repositories into the current directory:
 gh team repo clone octo/platform
 ```
 
-## Planned Behavior
+Pipe results into another command:
+
+```bash
+gh team repo list octo/platform | xargs -L1 gh repo view
+```
+
+## Behavior
 
 - Team arguments use the form `<org>/<team-slug>`.
 - Repository output is printed one full repository name per line in `<org>/<repo>` form, sorted alphabetically.
@@ -116,8 +114,8 @@ gh team repo clone octo/platform
 - `gh team repo clone` delegates cloning to `gh repo clone` and clones into subdirectories of the current working directory.
 - If a destination directory already exists, the clone for that repository is skipped, a non-fatal warning is printed to `stderr`, and the remaining clones still run.
 - Clone operations continue past per-repository failures and exit non-zero if any clone failed.
-- Missing authentication should be surfaced with guidance to run `gh auth login`.
-- Missing scopes should be surfaced with actionable guidance such as `gh auth refresh -s read:org`; for private repositories, `codeowners` may additionally require `gh auth refresh -s read:org,repo`.
+- Missing authentication is surfaced with guidance to run `gh auth login`.
+- Missing scopes are surfaced with actionable guidance such as `gh auth refresh -s read:org`; for private repositories, `codeowners` may additionally require `gh auth refresh -s read:org,repo`.
 
 ### Exit behavior
 
@@ -125,18 +123,10 @@ gh team repo clone octo/platform
 - Invalid team arguments, missing teams, invalid flag combinations, authentication failures, and rate-limit failures return a non-zero exit status.
 - Rate-limit errors name the affected limit (core REST, GraphQL, or code search) and the absolute UTC reset time taken from the response headers.
 
-## Installation
+## Repository layout
 
-The extension is not published yet. Once it is published, installation is expected to follow the normal GitHub CLI extension flow:
-
-```bash
-gh extension install szkiba/gh-team
-```
-
-For now, see [Build from source](#build-from-source).
-
-## Repository Layout
-
-- [`brief.md`](./brief.md): product brief for the MVP.
-- [`openspec/project.md`](./openspec/project.md): project context, constraints, and conventions.
-- [`openspec/changes/add-gh-team-cli/`](./openspec/changes/add-gh-team-cli/): proposal, tasks, and detailed specs.
+- [`brief.md`](./brief.md) — product brief for the MVP.
+- [`openspec/project.md`](./openspec/project.md) — project context, constraints, and conventions.
+- [`openspec/changes/add-gh-team-cli/`](./openspec/changes/add-gh-team-cli/) — proposal, tasks, and detailed specs.
+- [`cmd/`](./cmd/) — Cobra command tree.
+- [`internal/ownership/`](./internal/ownership/) — strategy-agnostic resolver, both ownership strategies, and CODEOWNERS parser.

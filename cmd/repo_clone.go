@@ -14,7 +14,20 @@ func newRepoCloneCmd(flags *globalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "clone <org/team-slug>",
 		Short: "Clone every repository owned by the team into the current directory",
-		Args:  cobra.ExactArgs(1),
+		Long: `Resolve the team's owned repositories under the active ownership
+strategy and run "gh repo clone <org>/<repo>" for each into a
+subdirectory of the current working directory.
+
+Pre-existing directories are skipped with a non-fatal warning to
+stderr so a partial state is recoverable. Per-repository clone
+failures are aggregated; the batch continues and the command exits
+non-zero at the end if any clone failed.`,
+		Example: `  # Clone every owned repository into the current directory
+  gh team repo clone octo/platform
+
+  # Use CODEOWNERS to determine ownership
+  gh team repo clone octo/platform --ownership=codeowners`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			org, slug, err := parseOrgTeam(args[0])
 			if err != nil {
