@@ -56,6 +56,14 @@ type restClient interface {
 // NewResolver constructs the resolver for the named strategy. stderr is used
 // only by the codeowners strategy to emit the one-line search-index-lag note.
 func NewResolver(strategy Strategy, client *api.RESTClient, stderr io.Writer) (Resolver, error) {
+	return newResolver(strategy, client, stderr)
+}
+
+// newResolver is the internal constructor that takes the narrow restClient
+// interface, so tests can substitute a fake without an HTTP server. The
+// public NewResolver delegates here, so both production and test paths
+// build the same strategy values.
+func newResolver(strategy Strategy, client restClient, stderr io.Writer) (Resolver, error) {
 	switch strategy {
 	case StrategyPermission:
 		return &permissionStrategy{client: client}, nil
