@@ -22,14 +22,22 @@ func newRootCmd() *cobra.Command {
 
 	root := &cobra.Command{
 		Use:   "team",
-		Short: "Discover repositories owned by a GitHub team",
-		Long: `gh team lists or clones the repositories owned by a GitHub team.
+		Short: "Discover repositories and security alerts owned by a GitHub team",
+		Long: `gh team lists or clones the repositories owned by a GitHub team and
+inspects open Dependabot and code-scanning alerts across them.
 
 Ownership is resolved through a configurable Team Ownership Model:
   - permission (default): the team or any sub-team has Admin or Maintain
     permission on the repository.
   - codeowners: the team appears on the last bare "*" rule in the
     repository's effective CODEOWNERS file on the default branch.
+
+Security subcommands assume the caller has at least repository maintain
+permission on each owned repository. That baseline maps cleanly to
+--ownership=permission; with --ownership=codeowners the resolver may
+return repositories the caller cannot read alerts for, which yield
+per-repository warnings and a non-zero exit while accessible
+repositories still contribute output.
 
 The team argument is always "<org>/<team-slug>". Authentication and
 rate limits are inherited from the host gh CLI session; sign in with
@@ -41,7 +49,13 @@ rate limits are inherited from the host gh CLI session; sign in with
   gh team repo list octo/platform --ownership=codeowners
 
   # Clone every owned repository into the current directory
-  gh team repo clone octo/platform`,
+  gh team repo clone octo/platform
+
+  # Summarize open Dependabot and code-scanning alerts
+  gh team security summary octo/platform
+
+  # List individual open code-scanning alerts
+  gh team security alerts octo/platform --kind=code-scanning`,
 		SilenceUsage:  true,
 		SilenceErrors: false,
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
@@ -59,7 +73,7 @@ rate limits are inherited from the host gh CLI session; sign in with
 	root.PersistentFlags().BoolVar(&flags.includeArchived, "include-archived", false,
 		"include archived repositories")
 
-	root.AddCommand(newRepoCmd(flags))
+	root.AddCommand(newRepoCmd(flags), newSecurityCmd(flags))
 
 	return root
 }
