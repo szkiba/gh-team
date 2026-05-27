@@ -1,12 +1,12 @@
 # gh team
 
-`gh team` is a GitHub CLI (`gh`) extension for discovering repositories owned by a GitHub team.
+`gh team` is a GitHub CLI (`gh`) extension for discovering repositories owned by a GitHub team and reporting on open security alerts across them.
 
-It is designed for teams that need a consistent, scriptable way to answer questions like "which repositories do we own?" without writing custom API scripts or clicking through the GitHub UI.
+It is designed for teams that need a consistent, scriptable way to answer questions like "which repositories do we own?" and "where are our open Dependabot or code-scanning alerts?" without writing custom API scripts or clicking through the GitHub UI.
 
 ## Status
 
-The MVP (`team repo list`, `team repo clone`) is implemented and tested. The MVP is intentionally focused on repository discovery and cloning. Security and vulnerability commands are tracked for a follow-up change once the shared ownership resolver is in production use.
+Repository discovery (`team repo list`, `team repo clone`) and read-only security inspection (`team security summary`, `team security alerts`) are implemented and tested. The security commands cover open Dependabot and code-scanning alerts; secret scanning is intentionally out of scope for this release.
 
 ## Install
 
@@ -42,6 +42,8 @@ Building from source requires Go 1.25+.
 ```text
 gh team repo list <org/team-slug>
 gh team repo clone <org/team-slug>
+gh team security summary <org/team-slug> [--kind=dependabot|code-scanning|all]
+gh team security alerts  <org/team-slug> [--kind=dependabot|code-scanning|all]
 ```
 
 ### Global flags
@@ -111,6 +113,47 @@ Pipe results into another command:
 gh team repo list octo/platform | xargs -L1 gh repo view
 ```
 
+### Security alerts
+
+`gh team security summary` prints open alert counts per owned repository and family. Output is tab-separated, sorted by repository then family, and lines with zero open alerts are dropped:
+
+```bash
+gh team security summary octo/platform
+```
+
+Example output:
+
+```text
+octo/api	code-scanning	1
+octo/api	dependabot	2
+octo/web	code-scanning	3
+```
+
+`gh team security alerts` prints one tab-separated line per open alert. Columns are `family`, `<org>/<repo>`, key, severity, URL. The Dependabot key is `<ecosystem>:<package>@<manifest-path>`; the code-scanning key is the rule id. Code-scanning severity prefers `security_severity_level` and falls back to `rule.severity`:
+
+```bash
+gh team security alerts octo/platform
+```
+
+Restrict to a single family with `--kind`:
+
+```bash
+gh team security alerts octo/platform --kind=dependabot
+gh team security summary octo/platform --kind=code-scanning
+```
+
+`--kind=all` is a fixed alias for the union of `dependabot` and `code-scanning`. Secret scanning is intentionally excluded; a future family must be requested by name until a separate compatibility decision updates the alias.
+
+#### Maintainer baseline
+
+The security commands assume the caller has at least repository `maintain` permission on each owned repository. That baseline maps cleanly to `--ownership=permission`.
+
+With `--ownership=codeowners` the resolver can surface repositories the caller cannot read alerts for — wildcard CODEOWNERS ownership does not imply repository access. In that case the command continues, prints a per-repository warning to `stderr` naming the affected repository and alert family, and exits non-zero after rendering any successful results.
+
+Repositories where an alert family is simply not enabled (for example code scanning not configured) contribute no output line and no warning. A missing OAuth scope for security alerts is surfaced once with guidance to run `gh auth refresh -s read:org,security_events`.
+
+The security subcommands provide first-class auth guidance only for classic `gh auth` OAuth sessions, which is what `gh auth login` produces. Fine-grained personal access tokens and GitHub App tokens use dedicated repository permissions (`Dependabot alerts: read`, `Code scanning alerts: read`) instead of OAuth scopes; with one of those token types, a missing permission falls through the OAuth-scope detection and surfaces as a per-repository access-denied warning. The remedy in that case is to widen the token's repository permissions, not to run `gh auth refresh`.
+
 ## Behavior
 
 - Team arguments use the form `<org>/<team-slug>`.
@@ -120,13 +163,14 @@ gh team repo list octo/platform | xargs -L1 gh repo view
 - If a destination directory already exists, the clone for that repository is skipped, a non-fatal warning is printed to `stderr`, and the remaining clones still run.
 - Clone operations continue past per-repository failures and exit non-zero if any clone failed.
 - Missing authentication is surfaced with guidance to run `gh auth login`.
-- Missing scopes are surfaced with actionable guidance such as `gh auth refresh -s read:org`; for private repositories, `codeowners` may additionally require `gh auth refresh -s read:org,repo`.
+- Missing scopes are surfaced with actionable guidance such as `gh auth refresh -s read:org`; for private repositories, `codeowners` may additionally require `gh auth refresh -s read:org,repo`, and `security` subcommands surface `gh auth refresh -s read:org,security_events` when the OAuth session lacks the alert-read scope.
+- Security subcommands continue past per-repository alert-access failures, print warnings to `stderr` naming each affected repository and family, and exit non-zero if any hard failure occurred.
 
 ### Exit behavior
 
 - Success returns exit status `0`, including when no repositories match.
 - Invalid team arguments, missing teams, invalid flag combinations, authentication failures, and rate-limit failures return a non-zero exit status.
-- Rate-limit errors name the affected limit (core REST, GraphQL, or code search) and the absolute UTC reset time taken from the response headers.
+- Rate-limit errors name the affected limit (core REST, GraphQL, or code search) and an absolute UTC reset time. The reset time comes from `X-RateLimit-Reset` for primary limits and from `Retry-After` (delta-seconds or HTTP-date) for secondary / abuse-detection limits. When GitHub returns a secondary-limit response without either header, the message says so explicitly and recommends waiting a few minutes before retrying.
 
 ## Releasing
 
@@ -147,4 +191,5 @@ The release will appear at `https://github.com/szkiba/gh-team/releases/tag/v0.1.
 - [`openspec/changes/`](./openspec/changes/) — in-flight and archived change proposals.
 - [`cmd/`](./cmd/) — Cobra command tree.
 - [`internal/ownership/`](./internal/ownership/) — strategy-agnostic resolver, both ownership strategies, and CODEOWNERS parser.
+- [`internal/security/`](./internal/security/) — repository-level Dependabot and code-scanning alert collector with bounded concurrency.
 - [`.github/workflows/`](./.github/workflows/) — CI and release pipelines.
