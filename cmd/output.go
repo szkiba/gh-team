@@ -10,9 +10,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// outputFlags carries the raw `--json` / `--template` values for any
-// data-emitting subcommand. Resolve() turns them into a typed outputPlan
-// and validates mutual exclusion + template parsing.
+// outputFlags carries the raw `--json`, `--template`, and `--header` values
+// for any data-emitting subcommand. Resolve() turns them into a typed
+// outputPlan and validates mutual exclusion + template parsing.
 //
 // The template engine is configured with `missingkey=error` so that a
 // reference to a field that does not exist on the row context — for
@@ -24,6 +24,7 @@ import (
 type outputFlags struct {
 	json     bool
 	template string
+	header   bool
 }
 
 // attach registers the shared output flags on a Cobra command. Kept in
@@ -33,6 +34,8 @@ func (o *outputFlags) attach(c *cobra.Command) {
 		"render output as a JSON array instead of the default line format")
 	c.Flags().StringVar(&o.template, "template", "",
 		"render each item using a Go text/template; produces exactly one line per item")
+	c.Flags().BoolVar(&o.header, "header", false,
+		"prepend a single tab-separated header line of field names in default TSV mode (rejected with --json or --template)")
 }
 
 // outputMode is the resolved decision for how a command will write its
@@ -50,17 +53,25 @@ const (
 // build their rows, then hand them to plan.render along with a fallback
 // default renderer.
 type outputPlan struct {
-	mode outputMode
-	tmpl *template.Template
+	mode   outputMode
+	tmpl   *template.Template
+	header bool
 }
 
 // resolve validates flag combinations and pre-parses the template (when
 // set) so a malformed template fails before any GitHub API call is
 // issued. Mutual exclusion of `--json` and `--template` is enforced here
-// per the team-cli spec.
+// per the team-cli spec. `--header` is a default-mode modifier and is
+// rejected when combined with either output mode.
 func (o *outputFlags) resolve() (outputPlan, error) {
 	if o.json && o.template != "" {
 		return outputPlan{}, fmt.Errorf("--json and --template cannot be combined; pick one output mode")
+	}
+	if o.header && o.json {
+		return outputPlan{}, fmt.Errorf("--header cannot be combined with --json; --header applies only to default TSV mode")
+	}
+	if o.header && o.template != "" {
+		return outputPlan{}, fmt.Errorf("--header cannot be combined with --template; --header applies only to default TSV mode")
 	}
 	if o.json {
 		return outputPlan{mode: outputJSON}, nil
@@ -72,29 +83,63 @@ func (o *outputFlags) resolve() (outputPlan, error) {
 		}
 		return outputPlan{mode: outputTemplate, tmpl: t}, nil
 	}
-	return outputPlan{mode: outputDefault}, nil
+	return outputPlan{mode: outputDefault, header: o.header}, nil
 }
 
 // defaultRenderer writes one default-mode line for a single row. Each
 // command supplies its own so the existing byte-compatible default
 // behavior is preserved verbatim — the shared helper never touches the
 // default path beyond iterating.
+//
+// When `--header` is set, commands SHOULD return a row formatter that
+// matches the header columns. For `repo list` that means widening from
+// the single-column `<org>/<repo>` line to a four-column TSV; security
+// commands' default rows already match their JSON field-name contract
+// so no per-command branching is required.
 type defaultRenderer func(out io.Writer, row map[string]any) error
+
+// renderConfig pairs the per-row default renderer with the (optional)
+// fixed header line a command emits when `--header` is set. The header
+// string MUST NOT include a trailing newline — the helper appends one.
+type renderConfig struct {
+	header  string
+	headers []string // tab-separated field names; empty means no header support
+	defFn   defaultRenderer
+	// defHeaderFn is an optional alternate row renderer used when
+	// --header is set, so a command can widen its row shape to match the
+	// header columns. If nil, defFn is used in both branches.
+	defHeaderFn defaultRenderer
+}
 
 // render walks the row set in the order the caller supplied (which is
 // already sorted to match the command's default ordering) and writes the
 // chosen output mode to `out`. Template and JSON modes both honor that
 // caller-supplied order, so template mode preserves the same sort as
 // default mode for the same command.
-func (p outputPlan) render(out io.Writer, rows []map[string]any, def defaultRenderer) error {
+//
+// When the plan is in default mode and `header` is true, the helper
+// emits one tab-separated header line and then iterates rows through
+// `defHeaderFn` (falling back to `defFn` when the command has no
+// alternate row shape). The header is emitted even on an empty row set
+// so spreadsheet importers always see column names.
+func (p outputPlan) render(out io.Writer, rows []map[string]any, cfg renderConfig) error {
 	switch p.mode {
 	case outputJSON:
 		return p.renderJSON(out, rows)
 	case outputTemplate:
 		return p.renderTemplate(out, rows)
 	default:
+		rowFn := cfg.defFn
+		if p.header {
+			if _, err := fmt.Fprintln(out, cfg.header); err != nil {
+				return err
+			}
+			if cfg.defHeaderFn != nil {
+				rowFn = cfg.defHeaderFn
+			}
+		}
 		for _, r := range rows {
-			if err := def(out, r); err != nil {
+			if err := rowFn(out, r); err != nil {
 				return err
 			}
 		}

@@ -34,11 +34,16 @@ fixed alias for the union of dependabot and code-scanning.
 Use --json for a JSON array of summary objects, or --template with a
 Go text/template to render one custom line per item. The two flags
 are mutually exclusive. JSON and template fields: .repo, .family,
-.count. Items appear in the same repo-then-family order in every mode.`,
+.count. Items appear in the same repo-then-family order in every mode.
+
+Use --header in default TSV mode to prepend a single header line
+("repo\tfamily\tcount") for spreadsheet import. --header is rejected
+with --json or --template.`,
 		Example: `  gh team security summary octo/platform
   gh team security summary octo/platform --kind=dependabot
   gh team security summary octo/platform --json
-  gh team security summary octo/platform --template '{{.repo}} {{.family}}={{.count}}'`,
+  gh team security summary octo/platform --template '{{.repo}} {{.family}}={{.count}}'
+  gh team security summary octo/platform --header`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			return runSecuritySummary(c, flags, out, args[0], kindFlag)
@@ -77,7 +82,10 @@ func runSecuritySummary(c *cobra.Command, flags *globalFlags, out *outputFlags, 
 	// parse, embedded-newline rejection) cannot swallow per-repo
 	// diagnostics the team-security spec requires on stderr.
 	emitSecurityWarnings(c, res)
-	if err := plan.render(c.OutOrStdout(), summaryRows(res.Summary), renderSummaryDefault); err != nil {
+	if err := plan.render(c.OutOrStdout(), summaryRows(res.Summary), renderConfig{
+		header: "repo\tfamily\tcount",
+		defFn:  renderSummaryDefault,
+	}); err != nil {
 		return err
 	}
 	return securityExitStatus(res)

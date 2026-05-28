@@ -61,10 +61,10 @@ func TestRender_DefaultDelegatesPerCommand(t *testing.T) {
 		{"full_name": "octo/web"},
 	}
 	var buf bytes.Buffer
-	err := p.render(&buf, rows, func(out io.Writer, row map[string]any) error {
+	err := p.render(&buf, rows, renderConfig{defFn: func(out io.Writer, row map[string]any) error {
 		_, err := io.WriteString(out, row["full_name"].(string)+"\n")
 		return err
-	})
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestRender_JSONShape(t *testing.T) {
 		{"owner": "octo", "name": "web", "full_name": "octo/web", "archived": true},
 	}
 	var buf bytes.Buffer
-	if err := p.render(&buf, rows, nil); err != nil {
+	if err := p.render(&buf, rows, renderConfig{}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasSuffix(buf.String(), "\n") {
@@ -104,7 +104,7 @@ func TestRender_JSONEmptyArray(t *testing.T) {
 	o := &outputFlags{json: true}
 	p, _ := o.resolve()
 	var buf bytes.Buffer
-	if err := p.render(&buf, nil, nil); err != nil {
+	if err := p.render(&buf, nil, renderConfig{}); err != nil {
 		t.Fatal(err)
 	}
 	if buf.String() != "[]\n" {
@@ -128,7 +128,7 @@ func TestRender_TemplateOneLinePerItem(t *testing.T) {
 		{"full_name": "octo/web"},
 	}
 	var buf bytes.Buffer
-	if err := p.render(&buf, rows, nil); err != nil {
+	if err := p.render(&buf, rows, renderConfig{}); err != nil {
 		t.Fatal(err)
 	}
 	if buf.String() != "octo/api\nocto/ingestor\nocto/web\n" {
@@ -145,7 +145,7 @@ func TestRender_TemplateMissingKeyIsExecutionError(t *testing.T) {
 	p, _ := o.resolve()
 	rows := []map[string]any{{"full_name": "octo/api"}}
 	var buf bytes.Buffer
-	err := p.render(&buf, rows, nil)
+	err := p.render(&buf, rows, renderConfig{})
 	if err == nil {
 		t.Fatal("expected execution error for unknown field")
 	}
@@ -162,7 +162,7 @@ func TestRender_TemplateRejectsEmbeddedNewline(t *testing.T) {
 	p, _ := o.resolve()
 	rows := []map[string]any{{"owner": "octo", "name": "api"}}
 	var buf bytes.Buffer
-	err := p.render(&buf, rows, nil)
+	err := p.render(&buf, rows, renderConfig{})
 	if err == nil {
 		t.Fatal("expected embedded-newline rejection")
 	}
@@ -179,7 +179,7 @@ func TestRender_TemplateAllowsTrailingNewline(t *testing.T) {
 	p, _ := o.resolve()
 	rows := []map[string]any{{"full_name": "octo/api"}}
 	var buf bytes.Buffer
-	if err := p.render(&buf, rows, nil); err != nil {
+	if err := p.render(&buf, rows, renderConfig{}); err != nil {
 		t.Fatal(err)
 	}
 	if buf.String() != "octo/api\n" {
@@ -193,7 +193,7 @@ func TestRender_TemplateEmptyResult(t *testing.T) {
 	o := &outputFlags{template: "{{.full_name}}"}
 	p, _ := o.resolve()
 	var buf bytes.Buffer
-	if err := p.render(&buf, nil, nil); err != nil {
+	if err := p.render(&buf, nil, renderConfig{}); err != nil {
 		t.Fatal(err)
 	}
 	if buf.Len() != 0 {
@@ -207,7 +207,7 @@ func TestRender_TemplateEmptyResult(t *testing.T) {
 func TestRender_ErrorTypeForExecutionFailure(t *testing.T) {
 	o := &outputFlags{template: "{{.full_nam}}"}
 	p, _ := o.resolve()
-	err := p.render(io.Discard, []map[string]any{{"full_name": "octo/api"}}, nil)
+	err := p.render(io.Discard, []map[string]any{{"full_name": "octo/api"}}, renderConfig{})
 	if err == nil {
 		t.Fatal("expected error")
 	}

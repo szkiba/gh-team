@@ -31,11 +31,16 @@ Use --kind to restrict to a single family.
 Use --json for a JSON array of alert objects, or --template with a Go
 text/template to render one custom line per alert. The two flags are
 mutually exclusive. JSON and template fields: .family, .repo, .key,
-.severity, .url. Items appear in the same sorted order in every mode.`,
+.severity, .url. Items appear in the same sorted order in every mode.
+
+Use --header in default TSV mode to prepend a single header line
+("family\trepo\tkey\tseverity\turl") for spreadsheet import. --header
+is rejected with --json or --template.`,
 		Example: `  gh team security alerts octo/platform
   gh team security alerts octo/platform --kind=code-scanning
   gh team security alerts octo/platform --json
-  gh team security alerts octo/platform --template '{{.severity}} {{.repo}} {{.url}}'`,
+  gh team security alerts octo/platform --template '{{.severity}} {{.repo}} {{.url}}'
+  gh team security alerts octo/platform --header`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			return runSecurityAlerts(c, flags, out, args[0], kindFlag)
@@ -74,7 +79,10 @@ func runSecurityAlerts(c *cobra.Command, flags *globalFlags, out *outputFlags, a
 	// parse, embedded-newline rejection) cannot swallow per-repo
 	// diagnostics the team-security spec requires on stderr.
 	emitSecurityWarnings(c, res)
-	if err := plan.render(c.OutOrStdout(), alertRows(res.Alerts), renderAlertDefault); err != nil {
+	if err := plan.render(c.OutOrStdout(), alertRows(res.Alerts), renderConfig{
+		header: "family\trepo\tkey\tseverity\turl",
+		defFn:  renderAlertDefault,
+	}); err != nil {
 		return err
 	}
 	return securityExitStatus(res)

@@ -16,7 +16,7 @@ func renderAlertsWithPlan(t *testing.T, of *outputFlags, a []security.AlertRow) 
 		t.Fatalf("resolve: %v", err)
 	}
 	var buf bytes.Buffer
-	if err := plan.render(&buf, alertRows(a), renderAlertDefault); err != nil {
+	if err := plan.render(&buf, alertRows(a), renderConfig{header: "family\trepo\tkey\tseverity\turl", defFn: renderAlertDefault}); err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	return buf.String()
