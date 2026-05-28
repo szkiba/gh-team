@@ -52,6 +52,32 @@ gh team security alerts  <org/team-slug> [--kind=dependabot|code-scanning|all]
 - `--direct-only` — evaluates only repositories assigned directly to the top-level team, skipping sub-teams. Only valid with `--ownership=permission`; `--direct-only --ownership=codeowners` is rejected with an error because CODEOWNERS has no team hierarchy to limit.
 - `--include-archived` — includes archived repositories in the result (excluded by default).
 
+### Output flags
+
+Data-emitting subcommands (`repo list`, `security summary`, `security alerts`) accept two optional output flags. They are mutually exclusive and never change default-mode behavior when neither is set.
+
+- `--json` — emits a single JSON array, one object per item, sorted in the same order as default mode. A trailing newline is appended for shell friendliness. Empty result sets emit `[]\n`.
+- `--template <go-template>` — runs the supplied Go `text/template` once per item and emits exactly one line per execution. Items are rendered in the same order as default mode. The template engine is configured with `missingkey=error` so a typo against an unknown field (`{{.full_nam}}`) is reported as an execution error rather than rendering `<no value>`. Templates that produce more than one line per item are rejected with an explicit error.
+
+`gh team repo clone` does not accept these flags — it is a side-effect command without a dataset stdout contract.
+
+#### Field names
+
+The field names below are part of the public output contract. Additive fields may be introduced in future versions; existing names will not be removed or renamed without a separate compatibility decision.
+
+| Command | Fields |
+| --- | --- |
+| `repo list` | `.owner`, `.name`, `.full_name`, `.archived` |
+| `security summary` | `.repo`, `.family`, `.count` |
+| `security alerts` | `.family`, `.repo`, `.key`, `.severity`, `.url` |
+
+#### Deferred output ideas
+
+- `--output <path>`: deferred — shell redirection covers it; file-overwrite semantics and permission handling can come later.
+- `--format tsv|json|template`: deferred — explicit flags are clearer for v1.
+- `--no-warnings`: rejected for now — would hide partial-failure information important for security commands.
+- `--color` / table rendering: deferred — the project favors deterministic pipe-friendly output over terminal decoration.
+
 ## Ownership models
 
 `gh team` supports two ownership strategies selected with `--ownership`:
@@ -113,6 +139,18 @@ Pipe results into another command:
 gh team repo list octo/platform | xargs -L1 gh repo view
 ```
 
+JSON output for scripting:
+
+```bash
+gh team repo list octo/platform --json | jq '.[] | select(.archived | not) | .full_name'
+```
+
+Custom one-line-per-repo rendering:
+
+```bash
+gh team repo list octo/platform --template '{{.full_name}} archived={{.archived}}'
+```
+
 ### Security alerts
 
 `gh team security summary` prints open alert counts per owned repository and family. Output is tab-separated, sorted by repository then family, and lines with zero open alerts are dropped:
@@ -140,6 +178,20 @@ Restrict to a single family with `--kind`:
 ```bash
 gh team security alerts octo/platform --kind=dependabot
 gh team security summary octo/platform --kind=code-scanning
+```
+
+JSON output for scripting:
+
+```bash
+gh team security summary octo/platform --json | jq '.[] | select(.count > 5)'
+gh team security alerts  octo/platform --json | jq '.[] | select(.severity == "high")'
+```
+
+Custom one-line-per-item rendering:
+
+```bash
+gh team security summary octo/platform --template '{{.repo}} {{.family}}={{.count}}'
+gh team security alerts  octo/platform --template '{{.severity}} {{.repo}} {{.url}}'
 ```
 
 `--kind=all` is a fixed alias for the union of `dependabot` and `code-scanning`. Secret scanning is intentionally excluded; a future family must be requested by name until a separate compatibility decision updates the alias.

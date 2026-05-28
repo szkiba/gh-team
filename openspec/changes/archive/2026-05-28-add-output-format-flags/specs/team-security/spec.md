@@ -1,8 +1,5 @@
-# team-security Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change add-team-security-subcommands. Update Purpose after archive.
-## Requirements
 ### Requirement: Summarize open security alerts for owned repositories
 The system SHALL provide a `gh team security summary <org/team-slug>` command that resolves the repositories owned by the team under the active ownership strategy and summarizes open alerts.
 
@@ -120,58 +117,3 @@ Security commands SHALL keep warnings and partial-failure diagnostics on stderr 
 - **THEN** stdout still contains JSON for successful items
 - **AND** stderr includes warning text naming `octo/web`
 - **AND** the command exits with status `1` after processing completes
-
-### Requirement: Select supported alert families
-Security commands SHALL support a `--kind=dependabot|code-scanning|all` flag, with `all` as the default. `all` SHALL mean exactly the union of `dependabot` and `code-scanning`. The system SHALL reject any other value with exit status `1` and an error naming the supported values. Secret scanning SHALL NOT be included in `all` for this change, and later alert families SHALL require explicit opt-in by name unless a future compatibility change updates this alias.
-
-#### Scenario: Dependabot-only summary
-- **GIVEN** team `octo/platform` owns repository `octo/api`
-- **AND** `octo/api` has both open Dependabot and open code-scanning alerts
-- **WHEN** the user runs `gh team security summary octo/platform --kind=dependabot`
-- **THEN** stdout contains only the Dependabot summary line for `octo/api`
-
-#### Scenario: Unsupported alert family rejected
-- **WHEN** the user runs `gh team security summary octo/platform --kind=secret-scanning`
-- **THEN** the command exits with status `1`
-- **AND** stderr explains that the supported values are `dependabot`, `code-scanning`, and `all`
-
-### Requirement: Collect every alert page before rendering output
-For each resolved repository and requested alert family, the system SHALL collect every page of alerts returned by the GitHub API before rendering summary counts or alert lines. The system SHALL request only alerts with `state=open` for both supported alert families.
-
-#### Scenario: Multi-page Dependabot summary
-- **GIVEN** team `octo/platform` owns repository `octo/api`
-- **AND** the open Dependabot alerts for `octo/api` span multiple API pages
-- **WHEN** the user runs `gh team security summary octo/platform --kind=dependabot`
-- **THEN** the summary count for `octo/api` includes alerts from every page
-
-#### Scenario: Multi-page code-scanning listing
-- **GIVEN** team `octo/platform` owns repository `octo/api`
-- **AND** the open code-scanning alerts for `octo/api` span multiple API pages
-- **WHEN** the user runs `gh team security alerts octo/platform --kind=code-scanning`
-- **THEN** stdout contains alert lines from every page in deterministic sorted order
-
-### Requirement: Continue across repositories and report hard failures
-Security commands SHALL collect alerts repository-by-repository after ownership resolution. If a requested alert family is unavailable or disabled for a repository, the system SHALL treat that repository/family pair as contributing zero alerts and SHALL continue without a warning. If a repository/family pair cannot be queried because the authenticated user lacks required access or token scope, the system SHALL continue processing the remaining repositories, print a warning to stderr naming the affected repository and alert family, and exit with status `1` after processing completes.
-
-#### Scenario: Feature unavailable is treated as zero alerts
-- **GIVEN** team `octo/platform` owns repository `octo/api`
-- **AND** code scanning is not enabled for `octo/api`
-- **WHEN** the user runs `gh team security summary octo/platform --kind=code-scanning`
-- **THEN** `octo/api` contributes no output line
-- **AND** the command exits with status 0
-
-#### Scenario: One repository lacks alert access
-- **GIVEN** team `octo/platform` owns repositories `octo/api` and `octo/web`
-- **AND** the authenticated user can read Dependabot alerts for `octo/api`
-- **AND** the authenticated user cannot read Dependabot alerts for `octo/web`
-- **WHEN** the user runs `gh team security alerts octo/platform --kind=dependabot`
-- **THEN** stdout still includes any alert lines collected from `octo/api`
-- **AND** stderr includes a warning naming `octo/web` and `dependabot`
-- **AND** the command exits with status `1` after all repositories have been processed
-
-#### Scenario: Codeowners ownership can surface inaccessible repositories
-- **GIVEN** team `octo/platform` owns repository `octo/docs` under `--ownership=codeowners`
-- **AND** the authenticated user does not have sufficient repository access to read alerts for `octo/docs`
-- **WHEN** the user runs `gh team security summary octo/platform --ownership=codeowners`
-- **THEN** stderr includes a warning naming `octo/docs`
-- **AND** the command exits with status `1` after any accessible repositories have been processed
