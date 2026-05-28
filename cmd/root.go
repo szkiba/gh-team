@@ -22,9 +22,11 @@ func newRootCmd() *cobra.Command {
 
 	root := &cobra.Command{
 		Use:   "team",
-		Short: "Discover repositories and security alerts owned by a GitHub team",
-		Long: `gh team lists or clones the repositories owned by a GitHub team and
-inspects open Dependabot and code-scanning alerts across them.
+		Short: "Discover repositories, security alerts, and security PRs for a GitHub team",
+		Long: `gh team lists or clones the repositories owned by a GitHub team,
+inspects open Dependabot and code-scanning alerts across them, and
+lists open pull requests in those repositories that match a security
+signal (title regex or label).
 
 Ownership is resolved through a configurable Team Ownership Model:
   - permission (default): the team or any sub-team has Admin or Maintain
@@ -35,9 +37,10 @@ Ownership is resolved through a configurable Team Ownership Model:
 Security subcommands assume the caller has at least repository maintain
 permission on each owned repository. That baseline maps cleanly to
 --ownership=permission; with --ownership=codeowners the resolver may
-return repositories the caller cannot read alerts for, which yield
-per-repository warnings and a non-zero exit while accessible
-repositories still contribute output.
+return repositories the caller cannot read security data for (alerts
+for summary/alerts, pull requests for prs), which yield per-repository
+warnings and a non-zero exit while accessible repositories still
+contribute output.
 
 The team argument is always "<org>/<team-slug>". Authentication and
 rate limits are inherited from the host gh CLI session; sign in with
@@ -55,7 +58,10 @@ rate limits are inherited from the host gh CLI session; sign in with
   gh team security summary octo/platform
 
   # List individual open code-scanning alerts
-  gh team security alerts octo/platform --kind=code-scanning`,
+  gh team security alerts octo/platform --kind=code-scanning
+
+  # List open security-tagged pull requests across owned repositories
+  gh team security prs octo/platform`,
 		SilenceUsage:  true,
 		SilenceErrors: false,
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
