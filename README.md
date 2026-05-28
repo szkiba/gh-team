@@ -1,12 +1,12 @@
 # gh team
 
-`gh team` is a GitHub CLI (`gh`) extension for discovering repositories owned by a GitHub team and reporting on open security alerts across them.
+`gh team` is a GitHub CLI (`gh`) extension for discovering repositories owned by a GitHub team and reporting on open security alerts and security-related pull requests across them.
 
-It is designed for teams that need a consistent, scriptable way to answer questions like "which repositories do we own?" and "where are our open Dependabot or code-scanning alerts?" without writing custom API scripts or clicking through the GitHub UI.
+It is designed for teams that need a consistent, scriptable way to answer questions like "which repositories do we own?", "where are our open Dependabot or code-scanning alerts?", and "what security PRs are currently in flight?" without writing custom API scripts or clicking through the GitHub UI.
 
 ## Status
 
-Repository discovery (`team repo list`, `team repo clone`) and read-only security inspection (`team security summary`, `team security alerts`) are implemented and tested. The security commands cover open Dependabot and code-scanning alerts; secret scanning is intentionally out of scope for this release.
+Repository discovery (`team repo list`, `team repo clone`) and read-only security inspection (`team security summary`, `team security alerts`, `team security prs`) are implemented and tested. The alerts commands cover open Dependabot and code-scanning alerts; secret scanning is intentionally out of scope for this release. `team security prs` lists open pull requests in owned repositories whose title or labels match a security signal.
 
 ## Install
 
@@ -44,6 +44,7 @@ gh team repo list <org/team-slug>
 gh team repo clone <org/team-slug>
 gh team security summary <org/team-slug> [--kind=dependabot|code-scanning|all]
 gh team security alerts  <org/team-slug> [--kind=dependabot|code-scanning|all]
+gh team security prs     <org/team-slug> [--title <regex>] [--label <name>]...
 ```
 
 ### Global flags
@@ -54,7 +55,7 @@ gh team security alerts  <org/team-slug> [--kind=dependabot|code-scanning|all]
 
 ### Output flags
 
-Data-emitting subcommands (`repo list`, `security summary`, `security alerts`) accept three optional output flags. `--json` and `--template` are mutually exclusive output modes; `--header` is a modifier on default (TSV) mode and is rejected when combined with either output mode. Default behavior is unchanged when no flag is set.
+Data-emitting subcommands (`repo list`, `security summary`, `security alerts`, `security prs`) accept three optional output flags. `--json` and `--template` are mutually exclusive output modes; `--header` is a modifier on default (TSV) mode and is rejected when combined with either output mode. Default behavior is unchanged when no flag is set.
 
 - `--json` — emits a single JSON array, one object per item, sorted in the same order as default mode. A trailing newline is appended for shell friendliness. Empty result sets emit `[]\n`.
 - `--template <go-template>` — runs the supplied Go `text/template` once per item and emits exactly one line per execution. Items are rendered in the same order as default mode. The template engine is configured with `missingkey=error` so a typo against an unknown field (`{{.full_nam}}`) is reported as an execution error rather than rendering `<no value>`. Templates that produce more than one line per item are rejected with an explicit error.
@@ -71,6 +72,7 @@ The field names below are part of the public output contract. Additive fields ma
 | `repo list` | `.owner`, `.name`, `.full_name`, `.archived` |
 | `security summary` | `.repo`, `.family`, `.count` |
 | `security alerts` | `.family`, `.repo`, `.key`, `.severity`, `.url` |
+| `security prs` | `.repo`, `.number`, `.state`, `.title`, `.author`, `.updated`, `.url` |
 
 #### Deferred output ideas
 
@@ -79,6 +81,8 @@ The field names below are part of the public output contract. Additive fields ma
 - `--markdown`: deferred — a markdown table output mode is scoped for a follow-up change.
 - `--no-warnings`: rejected for now — would hide partial-failure information important for security commands.
 - `--color` / table rendering: deferred — the project favors deterministic pipe-friendly output over terminal decoration.
+- `gh team security prs --state=open|merged|closed|all`: deferred — v1 is `state=open` only; add a `--state` flag and the `--since` window it implies in a follow-up.
+- `gh team security prs --author <login>`: deferred — Dependabot opens routine version-bump PRs as well as security ones, so author-based defaults would be noisy. Cross-linking PRs against the Dependabot alert that triggered them is a separate change.
 
 ## Ownership models
 
@@ -219,11 +223,44 @@ gh team security alerts  octo/platform --header
 
 `--kind=all` is a fixed alias for the union of `dependabot` and `code-scanning`. Secret scanning is intentionally excluded; a future family must be requested by name until a separate compatibility decision updates the alias.
 
+### Security pull requests
+
+`gh team security prs <org/team-slug>` lists open pull requests across the team's owned repositories that match a security signal. It rounds out the security triad: `summary` counts open alerts, `alerts` lists individual findings, and `prs` lists the in-flight remediation.
+
+A PR matches when **any** of these signals is true (OR-combined):
+
+- title matches the default regex `(?i)^\[security\]|^security:|\[security\]$` — covers `[security] …`, `security: …`, and `… [security]` conventions case-insensitively.
+- a label is exactly `security`.
+
+Override defaults with:
+
+- `--title <regex>` — replaces the title default. Value is a Go regular expression and must compile; an invalid pattern fails fast before any API call.
+- `--label <name>` — replaces the label default. Repeatable; a PR matches if any of its labels equals any value passed.
+
+Examples:
+
+```bash
+gh team security prs octo/platform
+gh team security prs octo/platform --label compliance --label audit
+gh team security prs octo/platform --title '^SEC-[0-9]+'
+gh team security prs octo/platform --json | jq '.[] | select(.author=="alice")'
+gh team security prs octo/platform --template '{{.repo}}#{{.number}} {{.title}}'
+gh team security prs octo/platform --header
+```
+
+Default-mode rows are `repo\tnumber\tstate\ttitle\tauthor\tupdated\turl`. The header line emits the same column names. `updated` is the GitHub `updated_at` field rendered as ISO-8601 UTC with a trailing `Z`. Tabs and newlines that appear inside a PR title are replaced with a single space in default and `--header` modes so the seven-column TSV stays one line per row; `--json` preserves titles verbatim.
+
+Rows are sorted by repository ascending and, within a repository, by PR number descending (newest PR first).
+
+Only PRs in state `open` are listed in v1. A `--state` flag is deferred (see Deferred output ideas).
+
+Listing pull requests on private repositories requires repository-read access on the host `gh` session — that is, the classic OAuth `repo` scope (or an equivalent fine-grained `Pull requests: read` permission) — **in addition to** the `read:org` scope already required by ownership resolution. A 403 with the wrong scope surfaces `gh auth refresh -s repo` rather than the security-alert guidance.
+
 #### Maintainer baseline
 
 The security commands assume the caller has at least repository `maintain` permission on each owned repository. That baseline maps cleanly to `--ownership=permission`.
 
-With `--ownership=codeowners` the resolver can surface repositories the caller cannot read alerts for — wildcard CODEOWNERS ownership does not imply repository access. In that case the command continues, prints a per-repository warning to `stderr` naming the affected repository and alert family, and exits non-zero after rendering any successful results.
+With `--ownership=codeowners` the resolver can surface repositories the caller cannot read security data for — wildcard CODEOWNERS ownership does not imply repository access. In that case the command continues, prints a per-repository warning to `stderr` naming the affected repository (and the alert family for `summary` / `alerts`, or the missing access for `prs`), and exits non-zero after rendering any successful results.
 
 Repositories where an alert family is simply not enabled (for example code scanning not configured) contribute no output line and no warning. A missing OAuth scope for security alerts is surfaced once with guidance to run `gh auth refresh -s read:org,security_events`.
 
@@ -238,8 +275,8 @@ The security subcommands provide first-class auth guidance only for classic `gh 
 - If a destination directory already exists, the clone for that repository is skipped, a non-fatal warning is printed to `stderr`, and the remaining clones still run.
 - Clone operations continue past per-repository failures and exit non-zero if any clone failed.
 - Missing authentication is surfaced with guidance to run `gh auth login`.
-- Missing scopes are surfaced with actionable guidance such as `gh auth refresh -s read:org`; for private repositories, `codeowners` may additionally require `gh auth refresh -s read:org,repo`, and `security` subcommands surface `gh auth refresh -s read:org,security_events` when the OAuth session lacks the alert-read scope.
-- Security subcommands continue past per-repository alert-access failures, print warnings to `stderr` naming each affected repository and family, and exit non-zero if any hard failure occurred.
+- Missing scopes are surfaced with actionable guidance such as `gh auth refresh -s read:org`; for private repositories, `codeowners` may additionally require `gh auth refresh -s read:org,repo`, `security summary` and `security alerts` surface `gh auth refresh -s read:org,security_events` when the OAuth session lacks the alert-read scope, and `security prs` surfaces `gh auth refresh -s repo` (or an equivalent fine-grained `Pull requests: read` permission) when the session can resolve ownership but cannot list pull requests on private repos.
+- Security subcommands continue past per-repository access failures (alert family for `summary` / `alerts`, pull-request listing for `prs`), print warnings to `stderr` naming each affected repository, and exit non-zero if any hard failure occurred.
 
 ### Exit behavior
 

@@ -143,6 +143,16 @@ func missingScopeMessage(herr *api.HTTPError) string {
 			return "missing required OAuth scope for security-alert access: run `gh auth refresh -s read:org,security_events`"
 		}
 	}
+	// The pulls endpoint (used by `gh team security prs`) accepts the
+	// classic `repo` scope. Tokens that resolved ownership via `read:org`
+	// will not have it by default. Surface the targeted remediation so
+	// users don't get the generic fallback nor mistakenly run
+	// `--refresh -s read:org,security_events` (which would not help).
+	for _, a := range accepted {
+		if a == "repo" {
+			return "missing required OAuth scope to read pull requests: run `gh auth refresh -s repo` (or grant a fine-grained `Pull requests: read` permission)"
+		}
+	}
 	raw := herr.Headers.Get("X-Accepted-Oauth-Scopes")
 	return fmt.Sprintf("missing required OAuth scope %q: run `gh auth refresh -s %s`", raw, raw)
 }
