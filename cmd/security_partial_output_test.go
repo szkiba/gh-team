@@ -33,9 +33,9 @@ func renderSecurityResult(t *testing.T, of *outputFlags, res *security.Result, k
 	var renderErr error
 	switch kind {
 	case "summary":
-		renderErr = plan.render(c.OutOrStdout(), summaryRows(res.Summary), renderSummaryDefault)
+		renderErr = plan.render(c.OutOrStdout(), summaryRows(res.Summary), renderConfig{header: "repo\tfamily\tcount", defFn: renderSummaryDefault})
 	case "alerts":
-		renderErr = plan.render(c.OutOrStdout(), alertRows(res.Alerts), renderAlertDefault)
+		renderErr = plan.render(c.OutOrStdout(), alertRows(res.Alerts), renderConfig{header: "family\trepo\tkey\tseverity\turl", defFn: renderAlertDefault})
 	default:
 		t.Fatalf("unknown kind %q", kind)
 	}

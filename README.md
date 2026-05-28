@@ -54,10 +54,11 @@ gh team security alerts  <org/team-slug> [--kind=dependabot|code-scanning|all]
 
 ### Output flags
 
-Data-emitting subcommands (`repo list`, `security summary`, `security alerts`) accept two optional output flags. They are mutually exclusive and never change default-mode behavior when neither is set.
+Data-emitting subcommands (`repo list`, `security summary`, `security alerts`) accept three optional output flags. `--json` and `--template` are mutually exclusive output modes; `--header` is a modifier on default (TSV) mode and is rejected when combined with either output mode. Default behavior is unchanged when no flag is set.
 
 - `--json` — emits a single JSON array, one object per item, sorted in the same order as default mode. A trailing newline is appended for shell friendliness. Empty result sets emit `[]\n`.
 - `--template <go-template>` — runs the supplied Go `text/template` once per item and emits exactly one line per execution. Items are rendered in the same order as default mode. The template engine is configured with `missingkey=error` so a typo against an unknown field (`{{.full_nam}}`) is reported as an execution error rather than rendering `<no value>`. Templates that produce more than one line per item are rejected with an explicit error.
+- `--header` — prepends a single tab-separated header line of field names in default TSV mode for direct import into Excel or Google Sheets. The header line is emitted even when the result is empty. For `gh team repo list`, setting `--header` also widens each data row to the same four-column TSV named in the header (`owner\tname\tfull_name\tarchived`) — the no-flag default stays single-column. `security summary` and `security alerts` default rows already match their header columns.
 
 `gh team repo clone` does not accept these flags — it is a side-effect command without a dataset stdout contract.
 
@@ -75,6 +76,7 @@ The field names below are part of the public output contract. Additive fields ma
 
 - `--output <path>`: deferred — shell redirection covers it; file-overwrite semantics and permission handling can come later.
 - `--format tsv|json|template`: deferred — explicit flags are clearer for v1.
+- `--markdown`: deferred — a markdown table output mode is scoped for a follow-up change.
 - `--no-warnings`: rejected for now — would hide partial-failure information important for security commands.
 - `--color` / table rendering: deferred — the project favors deterministic pipe-friendly output over terminal decoration.
 
@@ -151,6 +153,20 @@ Custom one-line-per-repo rendering:
 gh team repo list octo/platform --template '{{.full_name}} archived={{.archived}}'
 ```
 
+Labeled TSV with header line for spreadsheet import:
+
+```bash
+gh team repo list octo/platform --header --include-archived
+```
+
+Example output:
+
+```text
+owner	name	full_name	archived
+octo	api	octo/api	false
+octo	legacy	octo/legacy	true
+```
+
 ### Security alerts
 
 `gh team security summary` prints open alert counts per owned repository and family. Output is tab-separated, sorted by repository then family, and lines with zero open alerts are dropped:
@@ -194,6 +210,13 @@ gh team security summary octo/platform --template '{{.repo}} {{.family}}={{.coun
 gh team security alerts  octo/platform --template '{{.severity}} {{.repo}} {{.url}}'
 ```
 
+Labeled TSV with header line for spreadsheet import:
+
+```bash
+gh team security summary octo/platform --header
+gh team security alerts  octo/platform --header
+```
+
 `--kind=all` is a fixed alias for the union of `dependabot` and `code-scanning`. Secret scanning is intentionally excluded; a future family must be requested by name until a separate compatibility decision updates the alias.
 
 #### Maintainer baseline
@@ -209,7 +232,7 @@ The security subcommands provide first-class auth guidance only for classic `gh 
 ## Behavior
 
 - Team arguments use the form `<org>/<team-slug>`.
-- Repository output is printed one full repository name per line in `<org>/<repo>` form, sorted alphabetically.
+- Repository output is printed one full repository name per line in `<org>/<repo>` form, sorted alphabetically. With `gh team repo list --header`, each row widens to the four-column TSV `owner\tname\tfull_name\tarchived` documented in the output flags section.
 - Archived repositories are excluded unless `--include-archived` is set.
 - `gh team repo clone` delegates cloning to `gh repo clone` and clones into subdirectories of the current working directory.
 - If a destination directory already exists, the clone for that repository is skipped, a non-fatal warning is printed to `stderr`, and the remaining clones still run.

@@ -16,7 +16,7 @@ func renderReposWithPlan(t *testing.T, of *outputFlags, repos []ownership.Repo) 
 		t.Fatalf("resolve: %v", err)
 	}
 	var buf bytes.Buffer
-	if err := plan.render(&buf, repoRows(repos), renderRepoDefault); err != nil {
+	if err := plan.render(&buf, repoRows(repos), renderConfig{header: "owner\tname\tfull_name\tarchived", defFn: renderRepoDefault, defHeaderFn: renderRepoWithHeaderColumns}); err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	return buf.String()

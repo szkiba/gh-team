@@ -27,7 +27,14 @@ Go text/template to render one custom line per repository. The two
 flags are mutually exclusive. JSON and template fields: .owner, .name,
 .full_name, .archived. Template mode requires every referenced field
 to exist on the row context and rejects any rendering that produces
-more than one line per repository.`,
+more than one line per repository.
+
+Use --header in default TSV mode to prepend a single header line
+("owner\tname\tfull_name\tarchived") and switch the data rows to the
+same four-column TSV shape, so the output imports cleanly into Excel
+or Google Sheets. The no-flag default mode is unchanged (one
+"<org>/<repo>" per line). --header is rejected with --json or
+--template.`,
 		Example: `  # Default permission strategy
   gh team repo list octo/platform
 
@@ -47,7 +54,10 @@ more than one line per repository.`,
   gh team repo list octo/platform --json | jq '.[].full_name'
 
   # Custom one-line-per-repo rendering
-  gh team repo list octo/platform --template '{{.full_name}} archived={{.archived}}'`,
+  gh team repo list octo/platform --template '{{.full_name}} archived={{.archived}}'
+
+  # Labeled TSV with header line for spreadsheet import
+  gh team repo list octo/platform --header --include-archived`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			plan, err := out.resolve()
@@ -66,7 +76,11 @@ more than one line per repository.`,
 			if err != nil {
 				return translateAPIError(err)
 			}
-			return plan.render(c.OutOrStdout(), repoRows(repos), renderRepoDefault)
+			return plan.render(c.OutOrStdout(), repoRows(repos), renderConfig{
+				header:      "owner\tname\tfull_name\tarchived",
+				defFn:       renderRepoDefault,
+				defHeaderFn: renderRepoWithHeaderColumns,
+			})
 		},
 	}
 	out.attach(cmd)
@@ -93,5 +107,20 @@ func repoRows(repos []ownership.Repo) []map[string]any {
 // one `<org>/<repo>` per line, no header.
 func renderRepoDefault(out io.Writer, row map[string]any) error {
 	_, err := fmt.Fprintln(out, row["full_name"])
+	return err
+}
+
+// renderRepoWithHeaderColumns widens each row to the four-column TSV named
+// in the header — required by design Decision 0 so that the labeled
+// output is structurally consistent. The archived cell is rendered as the
+// lower-case string `true`/`false` so it lines up with the JSON boolean
+// contract when the cells land in a spreadsheet column typed as boolean.
+func renderRepoWithHeaderColumns(out io.Writer, row map[string]any) error {
+	archived := "false"
+	if v, _ := row["archived"].(bool); v {
+		archived = "true"
+	}
+	_, err := fmt.Fprintf(out, "%s\t%s\t%s\t%s\n",
+		row["owner"], row["name"], row["full_name"], archived)
 	return err
 }

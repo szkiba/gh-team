@@ -21,7 +21,7 @@ func renderSummaryWithPlan(t *testing.T, of *outputFlags, sum []security.Summary
 		t.Fatalf("resolve: %v", err)
 	}
 	var buf bytes.Buffer
-	if err := plan.render(&buf, summaryRows(sum), renderSummaryDefault); err != nil {
+	if err := plan.render(&buf, summaryRows(sum), renderConfig{header: "repo\tfamily\tcount", defFn: renderSummaryDefault}); err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	return buf.String()
@@ -115,7 +115,7 @@ func TestSecuritySummary_TemplateMissingKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	var buf bytes.Buffer
-	if err := plan.render(&buf, summaryRows(rows), renderSummaryDefault); err == nil {
+	if err := plan.render(&buf, summaryRows(rows), renderConfig{header: "repo\tfamily\tcount", defFn: renderSummaryDefault}); err == nil {
 		t.Fatal("expected execution error for unknown field .cnt")
 	}
 	if strings.Contains(buf.String(), "<no value>") {
