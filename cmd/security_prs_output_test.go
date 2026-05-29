@@ -22,8 +22,9 @@ func renderPullsWithPlan(t *testing.T, of *outputFlags, rows []security.PullRequ
 	}
 	var buf bytes.Buffer
 	if err := plan.render(&buf, pullRows(rows), renderConfig{
-		header: "repo\tnumber\tstate\ttitle\tauthor\tupdated\turl",
-		defFn:  renderPullDefault,
+		header:      "repo\tnumber\tstate\ttitle\tauthor\tupdated\turl",
+		defFn:       renderPullDefault,
+		defHeaderFn: renderPullWithHeaderColumns,
 	}); err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -43,16 +44,29 @@ func samplePulls() []security.PullRequest {
 	}
 }
 
-func TestSecurityPrs_DefaultByteCompat(t *testing.T) {
+func TestSecurityPrs_DefaultIsURLOnly(t *testing.T) {
 	got := renderPullsWithPlan(t, &outputFlags{}, samplePulls())
-	want := "octo/api\t17\topen\t[security] bump openssl\talice\t2026-05-28T07:30:15Z\thttps://github.com/octo/api/pull/17\n" +
-		"octo/web\t4\topen\troutine readme tweak\tcarol\t2026-05-27T10:00:00Z\thttps://github.com/octo/web/pull/4\n"
+	want := "https://github.com/octo/api/pull/17\n" +
+		"https://github.com/octo/web/pull/4\n"
 	if got != want {
 		t.Errorf("default prs output drifted:\n got %q\nwant %q", got, want)
 	}
+	if strings.Contains(got, "\t") {
+		t.Errorf("default mode must not emit tab characters; got %q", got)
+	}
 }
 
-func TestSecurityPrs_HeaderLine(t *testing.T) {
+func TestSecurityPrs_HeaderWidensToSevenColumnRow(t *testing.T) {
+	got := renderPullsWithPlan(t, &outputFlags{header: true}, samplePulls())
+	want := "repo\tnumber\tstate\ttitle\tauthor\tupdated\turl\n" +
+		"octo/api\t17\topen\t[security] bump openssl\talice\t2026-05-28T07:30:15Z\thttps://github.com/octo/api/pull/17\n" +
+		"octo/web\t4\topen\troutine readme tweak\tcarol\t2026-05-27T10:00:00Z\thttps://github.com/octo/web/pull/4\n"
+	if got != want {
+		t.Errorf("--header prs output drifted:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestSecurityPrs_HeaderLineFirst(t *testing.T) {
 	got := renderPullsWithPlan(t, &outputFlags{header: true}, samplePulls())
 	if !strings.HasPrefix(got, "repo\tnumber\tstate\ttitle\tauthor\tupdated\turl\n") {
 		t.Errorf("expected header line first; got %q", got)
@@ -67,31 +81,49 @@ func TestSecurityPrs_HeaderEmitsOnEmpty(t *testing.T) {
 	}
 }
 
-func TestSecurityPrs_TabInTitleSanitizedDefault(t *testing.T) {
+func TestSecurityPrs_TabInTitleSanitizedUnderHeader(t *testing.T) {
 	rows := []security.PullRequest{
 		{Repo: "octo/api", Number: 1, State: "open",
 			Title: "[security]\tweird\ttitle", Author: "a",
 			Updated: "2026-05-28T07:30:15Z", URL: "https://x"},
 	}
-	got := renderPullsWithPlan(t, &outputFlags{}, rows)
-	if strings.Count(got, "\t") != 6 {
-		t.Errorf("expected exactly 6 tabs in default row, got %d in %q", strings.Count(got, "\t"), got)
+	got := renderPullsWithPlan(t, &outputFlags{header: true}, rows)
+	// Header line (6 tabs) + data row (must contribute 6 more tabs).
+	if strings.Count(got, "\t") != 12 {
+		t.Errorf("expected exactly 12 tabs (6 header + 6 data) under --header, got %d in %q",
+			strings.Count(got, "\t"), got)
 	}
 	if !strings.Contains(got, "[security] weird title") {
 		t.Errorf("expected sanitized title %q in %q", "[security] weird title", got)
 	}
 }
 
-func TestSecurityPrs_NewlineInTitleSanitizedDefault(t *testing.T) {
+func TestSecurityPrs_NewlineInTitleSanitizedUnderHeader(t *testing.T) {
 	rows := []security.PullRequest{
 		{Repo: "octo/api", Number: 1, State: "open",
 			Title: "[security]\nweird\ntitle", Author: "a",
 			Updated: "2026-05-28T07:30:15Z", URL: "https://x"},
 	}
-	got := renderPullsWithPlan(t, &outputFlags{}, rows)
-	if strings.Count(got, "\n") != 1 {
-		t.Errorf("expected exactly one trailing newline in default row, got %d in %q",
+	got := renderPullsWithPlan(t, &outputFlags{header: true}, rows)
+	// Two newlines: one terminating the header, one terminating the data row.
+	if strings.Count(got, "\n") != 2 {
+		t.Errorf("expected exactly two newlines (header + data row terminator) under --header, got %d in %q",
 			strings.Count(got, "\n"), got)
+	}
+}
+
+func TestSecurityPrs_DefaultSortOrder(t *testing.T) {
+	rows := []security.PullRequest{
+		{Repo: "octo/api", Number: 23, State: "open", URL: "https://github.com/octo/api/pull/23"},
+		{Repo: "octo/api", Number: 17, State: "open", URL: "https://github.com/octo/api/pull/17"},
+		{Repo: "octo/web", Number: 4, State: "open", URL: "https://github.com/octo/web/pull/4"},
+	}
+	got := renderPullsWithPlan(t, &outputFlags{}, rows)
+	want := "https://github.com/octo/api/pull/23\n" +
+		"https://github.com/octo/api/pull/17\n" +
+		"https://github.com/octo/web/pull/4\n"
+	if got != want {
+		t.Errorf("default sort order mismatch:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -271,11 +303,66 @@ func TestSecurityPrs_PartialFailureRendersAndExits(t *testing.T) {
 
 	emitPullsWarnings(c, res)
 	if rerr := plan.render(c.OutOrStdout(), pullRows(res.PullRequests),
-		renderConfig{header: "repo\tnumber\tstate\ttitle\tauthor\tupdated\turl", defFn: renderPullDefault}); rerr != nil {
+		renderConfig{
+			header:      "repo\tnumber\tstate\ttitle\tauthor\tupdated\turl",
+			defFn:       renderPullDefault,
+			defHeaderFn: renderPullWithHeaderColumns,
+		}); rerr != nil {
 		t.Fatalf("render: %v", rerr)
 	}
 	if !strings.Contains(outBuf.String(), "octo/api\t17") {
 		t.Errorf("stdout missing successful row: %q", outBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "octo/web") {
+		t.Errorf("stderr missing per-repo warning: %q", errBuf.String())
+	}
+	if perr := pullsExitStatus(res); perr == nil {
+		t.Error("expected non-zero exit status carrier")
+	} else {
+		var ese errSecurityIncomplete
+		if !errors.As(perr, &ese) {
+			t.Errorf("exit error = %T, want errSecurityIncomplete", perr)
+		}
+	}
+}
+
+// TestSecurityPrs_PartialFailureDefaultModeURLOnly is the default-mode twin:
+// stdout contains only URL lines for the rows we have, stderr names the
+// failing repo, and the run still exits non-zero.
+func TestSecurityPrs_PartialFailureDefaultModeURLOnly(t *testing.T) {
+	res := &security.PullsResult{
+		PullRequests: []security.PullRequest{
+			{Repo: "octo/api", Number: 17, State: "open",
+				Title: "[security] ok", Author: "a",
+				Updated: "2026-05-28T07:30:15Z",
+				URL:     "https://github.com/octo/api/pull/17"},
+		},
+		Warnings:     []string{"warning: cannot read pull requests for octo/web: forbidden"},
+		HardFailures: 1,
+	}
+	plan, err := (&outputFlags{}).resolve()
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	c := &cobra.Command{}
+	var outBuf, errBuf bytes.Buffer
+	c.SetOut(&outBuf)
+	c.SetErr(&errBuf)
+
+	emitPullsWarnings(c, res)
+	if rerr := plan.render(c.OutOrStdout(), pullRows(res.PullRequests),
+		renderConfig{
+			header:      "repo\tnumber\tstate\ttitle\tauthor\tupdated\turl",
+			defFn:       renderPullDefault,
+			defHeaderFn: renderPullWithHeaderColumns,
+		}); rerr != nil {
+		t.Fatalf("render: %v", rerr)
+	}
+	if outBuf.String() != "https://github.com/octo/api/pull/17\n" {
+		t.Errorf("stdout = %q, want URL-only line", outBuf.String())
+	}
+	if strings.Contains(outBuf.String(), "\t") {
+		t.Errorf("default mode partial failure must not emit tabs; got %q", outBuf.String())
 	}
 	if !strings.Contains(errBuf.String(), "octo/web") {
 		t.Errorf("stderr missing per-repo warning: %q", errBuf.String())

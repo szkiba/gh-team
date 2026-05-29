@@ -162,9 +162,9 @@ When a template-mode command renders an item, the resulting line SHALL contain n
 - **AND** stdout does not include a multi-line rendering of any item
 
 ### Requirement: Default-mode header line is opt-in
-Data-emitting `gh team` subcommands SHALL accept an optional `--header` boolean flag. When `--header` is set and default (TSV) output mode is in effect, the command SHALL emit a single tab-separated header line of field names before any data rows. Field names SHALL match the JSON and template field-name contract published for each command. When `--header` is not set, command stdout SHALL remain byte-for-byte unchanged from the existing default-mode contract.
+Data-emitting `gh team` subcommands SHALL accept an optional `--header` boolean flag. When `--header` is set and default (TSV) output mode is in effect, the command SHALL emit a single tab-separated header line of field names before any data rows. Field names SHALL match the JSON and template field-name contract published for each command. When `--header` is not set, command stdout SHALL remain byte-for-byte unchanged from that command's existing no-flag default-mode contract.
 
-For commands whose default-mode rows already carry every field named in the header (`security summary`, `security alerts`), `--header` SHALL leave the rows themselves unchanged. For `gh team repo list`, whose default mode emits one column, `--header` SHALL also widen each data row so that the columns under the header line match the header — the precise per-command shape is defined in the `team-repo` and `team-security` specs.
+For commands whose default-mode rows already carry every field named in the header (`security summary`, `security alerts`), `--header` SHALL leave the rows themselves unchanged. For `gh team repo list` and `gh team security prs`, whose default mode emits one column, `--header` SHALL also widen each data row so that the columns under the header line match the header — the precise per-command shape is defined in the `team-repo` and `team-security` specs.
 
 The header line SHALL be emitted even when the result set has zero data rows so that downstream spreadsheet importers can pre-populate column names.
 
@@ -186,6 +186,12 @@ The header line SHALL be emitted even when the result set has zero data rows so 
 - **THEN** stdout is exactly `owner\tname\tfull_name\tarchived\n`
 - **AND** the exit status is 0
 
+#### Scenario: --header widens security prs from URL-only to seven-column TSV
+- **GIVEN** team `octo/platform` owns `octo/api` with one matching open PR
+- **WHEN** the user runs `gh team security prs octo/platform --header`
+- **THEN** stdout's first line is exactly `repo\tnumber\tstate\ttitle\tauthor\tupdated\turl`
+- **AND** the matching pull request's data row that follows is a seven-column tab-separated row, not the URL-only line the no-flag default would produce
+
 ### Requirement: Header flag is rejected with non-default output modes
 The system SHALL reject `--header` when combined with `--json` or `--template`. Combining `--header` with `--json` would produce a leading non-JSON line and break the JSON-array contract; combining `--header` with `--template` would force a header line into output the user explicitly templated. On rejection the command SHALL exit with a non-zero status and stderr SHALL name both conflicting flags and explain that `--header` applies only to default TSV mode.
 
@@ -204,7 +210,7 @@ The system SHALL reject `--header` when combined with `--json` or `--template`. 
 ### Requirement: `security prs` honors the shared output-flag contract
 The `gh team security prs` subcommand SHALL accept the same output flag set as the other data-emitting subcommands defined in this capability: `--header`, `--json`, and `--template`. The system SHALL reject `--header` when combined with `--json` or `--template`, and SHALL reject `--json` and `--template` together. Rejection SHALL exit non-zero with stderr explaining which flags conflicted; stdout SHALL be empty in the rejection case.
 
-When no output flag is set, default-mode TSV output SHALL apply with the seven-column shape defined in the `team-security` capability.
+When no output flag is set, default-mode output SHALL apply with the single-URL-per-line shape defined in the `team-security` capability. When `--header` is set, default-mode output SHALL widen to the seven-column TSV shape defined in the `team-security` capability, prefixed by the header line.
 
 #### Scenario: --header conflicts with --json on security prs
 - **WHEN** the user runs `gh team security prs octo/platform --header --json`

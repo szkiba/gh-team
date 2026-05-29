@@ -59,7 +59,7 @@ Data-emitting subcommands (`repo list`, `security summary`, `security alerts`, `
 
 - `--json` — emits a single JSON array, one object per item, sorted in the same order as default mode. A trailing newline is appended for shell friendliness. Empty result sets emit `[]\n`.
 - `--template <go-template>` — runs the supplied Go `text/template` once per item and emits exactly one line per execution. Items are rendered in the same order as default mode. The template engine is configured with `missingkey=error` so a typo against an unknown field (`{{.full_nam}}`) is reported as an execution error rather than rendering `<no value>`. Templates that produce more than one line per item are rejected with an explicit error.
-- `--header` — prepends a single tab-separated header line of field names in default TSV mode for direct import into Excel or Google Sheets. The header line is emitted even when the result is empty. For `gh team repo list`, setting `--header` also widens each data row to the same four-column TSV named in the header (`owner\tname\tfull_name\tarchived`) — the no-flag default stays single-column. `security summary` and `security alerts` default rows already match their header columns.
+- `--header` — emits a labeled TSV in default mode: prepends a single tab-separated header line of field names for direct import into Excel or Google Sheets. The header line is emitted even when the result is empty. For commands whose no-flag default is a single column — `gh team repo list` (URL-like `<org>/<repo>` lines) and `gh team security prs` (PR URL lines) — `--header` also widens each data row to the multi-column TSV named in the header (`owner\tname\tfull_name\tarchived` and `repo\tnumber\tstate\ttitle\tauthor\tupdated\turl` respectively). Because the header line is always emitted, scripts that currently consume the unflagged default-mode output cannot drop `--header` in as a pure addition — they must either skip the leading header line (for example with `tail -n +2`) or move to `--json`. `security summary` and `security alerts` default rows already match their header columns, so `--header` for those commands only prepends the header line without changing the row shape.
 
 `gh team repo clone` does not accept these flags — it is a side-effect command without a dataset stdout contract.
 
@@ -240,17 +240,28 @@ Override defaults with:
 Examples:
 
 ```bash
+# Default output: one PR URL per line — pipe-friendly.
 gh team security prs octo/platform
+
+# Open every matching PR in the browser.
+gh team security prs octo/platform | xargs -I{} gh pr view {} --web
+
+# Labeled seven-column TSV (with leading header line) for spreadsheets.
+gh team security prs octo/platform --header
+
+# Same TSV without the header line (for scripts that read row 1 as data).
+gh team security prs octo/platform --header | tail -n +2
+
+# Custom overrides and other output modes.
 gh team security prs octo/platform --label compliance --label audit
 gh team security prs octo/platform --title '^SEC-[0-9]+'
 gh team security prs octo/platform --json | jq '.[] | select(.author=="alice")'
 gh team security prs octo/platform --template '{{.repo}}#{{.number}} {{.title}}'
-gh team security prs octo/platform --header
 ```
 
-Default-mode rows are `repo\tnumber\tstate\ttitle\tauthor\tupdated\turl`. The header line emits the same column names. `updated` is the GitHub `updated_at` field rendered as ISO-8601 UTC with a trailing `Z`. Tabs and newlines that appear inside a PR title are replaced with a single space in default and `--header` modes so the seven-column TSV stays one line per row; `--json` preserves titles verbatim.
+Default-mode output is one PR URL per line — `<html_url>\n`, with no header, tabs, or other columns. Adding `--header` switches the default mode to a labeled seven-column TSV with the header line `repo\tnumber\tstate\ttitle\tauthor\tupdated\turl` followed by data rows in the same column order. `updated` is the GitHub `updated_at` field rendered as ISO-8601 UTC with a trailing `Z`. Tabs and newlines that appear inside a PR title are replaced with a single space in `--header` mode so the seven-column TSV stays one line per row; `--json` preserves titles verbatim.
 
-Rows are sorted by repository ascending and, within a repository, by PR number descending (newest PR first).
+Rows are sorted by repository ascending and, within a repository, by PR number descending (newest PR first). Sort order is identical across default, `--header`, `--json`, and `--template` modes.
 
 Only PRs in state `open` are listed in v1. A `--state` flag is deferred (see Deferred output ideas).
 
