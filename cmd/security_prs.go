@@ -19,8 +19,8 @@ func newSecurityPrsCmd(flags *globalFlags) *cobra.Command {
 	c := &cobra.Command{
 		Use:   "prs <org/team-slug>",
 		Short: "List open pull requests in owned repositories that match security signals",
-		Long: `Resolve the repositories owned by the team and print one tab-separated
-line per open pull request whose title or label set matches a security
+		Long: `Resolve the repositories owned by the team and print one open
+pull request per line whose title or label set matches a security
 signal.
 
 Defaults (combined as OR):
@@ -30,20 +30,24 @@ Defaults (combined as OR):
 Use --title to replace the title regex (Go syntax, must compile). Use
 --label to replace the label default; --label is repeatable.
 
-Each default-mode line is "<repo>\t<number>\t<state>\t<title>\t<author>\t<updated>\t<url>".
-Embedded tab and newline characters in the title are replaced with a
-single space in default and --header modes. JSON mode preserves the
-original title verbatim. Output is sorted by repository ascending,
-then by pull-request number descending (newest within each repo).
+Default mode emits one pull-request URL per line, so the output can
+be piped into commands like 'xargs -I{} gh pr view {} --web' (per-
+line invocation; plain "xargs gh pr view" batches multiple URLs into
+one call and fails, since gh pr view accepts a single argument).
+Output is sorted by repository ascending, then by pull-request
+number descending (newest within each repo).
 
 Use --json for a JSON array of pull-request objects, or --template
 with a Go text/template to render one custom line per PR. The two
 flags are mutually exclusive. JSON and template field names: .repo,
-.number, .state, .title, .author, .updated, .url.
+.number, .state, .title, .author, .updated, .url. JSON mode
+preserves the original title verbatim.
 
-Use --header in default TSV mode to prepend a single header line
-("repo\tnumber\tstate\ttitle\tauthor\tupdated\turl") for spreadsheet
-import. --header is rejected with --json or --template.
+Use --header to switch default mode to a labeled seven-column TSV
+("repo\tnumber\tstate\ttitle\tauthor\tupdated\turl") prefixed by a
+header line for spreadsheet import. Embedded tab and newline
+characters in the title are replaced with a single space in
+--header mode. --header is rejected with --json or --template.
 
 Only PRs in state "open" are listed in v1. Listing pull requests on
 private repositories requires repository-read access on the host gh
@@ -116,8 +120,9 @@ func runSecurityPrs(c *cobra.Command, flags *globalFlags, out *outputFlags, arg,
 
 	emitPullsWarnings(c, res)
 	if err := plan.render(c.OutOrStdout(), pullRows(res.PullRequests), renderConfig{
-		header: "repo\tnumber\tstate\ttitle\tauthor\tupdated\turl",
-		defFn:  renderPullDefault,
+		header:      "repo\tnumber\tstate\ttitle\tauthor\tupdated\turl",
+		defFn:       renderPullDefault,
+		defHeaderFn: renderPullWithHeaderColumns,
 	}); err != nil {
 		return err
 	}
@@ -155,7 +160,16 @@ func sanitizeTitleCell(s string) string {
 	return s
 }
 
+// renderPullDefault is the no-flag default: one PR URL per line.
 func renderPullDefault(out io.Writer, row map[string]any) error {
+	_, err := fmt.Fprintf(out, "%s\n", row["url"])
+	return err
+}
+
+// renderPullWithHeaderColumns is the --header row formatter: the seven-column
+// TSV that matches the header line. Sanitization keeps each row to a single
+// line so the column shape holds.
+func renderPullWithHeaderColumns(out io.Writer, row map[string]any) error {
 	_, err := fmt.Fprintf(out, "%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
 		row["repo"], row["number"], row["state"],
 		sanitizeTitleCell(fmt.Sprint(row["title"])),

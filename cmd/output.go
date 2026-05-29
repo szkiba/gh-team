@@ -35,7 +35,7 @@ func (o *outputFlags) attach(c *cobra.Command) {
 	c.Flags().StringVar(&o.template, "template", "",
 		"render each item using a Go text/template; produces exactly one line per item")
 	c.Flags().BoolVar(&o.header, "header", false,
-		"prepend a single tab-separated header line of field names in default TSV mode (rejected with --json or --template)")
+		"emit a labeled TSV in default mode: prepend a header line and (for single-column commands like repo list / security prs) widen each row to match the header columns (rejected with --json or --template)")
 }
 
 // outputMode is the resolved decision for how a command will write its
